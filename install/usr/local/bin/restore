@@ -619,6 +619,11 @@ get_dbtype() {
             DEFAULT_PORT=${DEFAULT_PORT:-"5432"}
             print_debug "Parsed DBType: Postgresql"
         ;;
+        couch* )
+            parsed_type=true
+            DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
+            print_debug "Parsed DBType: CouchDB"
+        ;;
         * )
             print_debug "Parsed DBType: UNKNOWN"
         ;;
@@ -1159,6 +1164,53 @@ EOF
         fi
 
         mongorestore ${mongo_compression} -d=${r_dbname} -h=${r_dbhost} --port=${r_dbport} ${mongo_dropdb} ${mongo_user} ${mongo_pass} --archive=${r_filename} ${mongo_auth_database}
+        exit_code=$?
+    ;;
+    couch* )
+        if [ -n "${r_dbuser}" ] && [ -n "${r_dbpass}" ]; then
+            _couch_auth="-u ${r_dbuser}:${r_dbpass}"
+        fi
+
+        cat << EOF
+
+Do you wish to drop any existing data before restoring?
+    Y ) Yes - Delete and recreate the database
+    N ) No - Merge/overwrite documents
+    Q ) Quit
+
+EOF
+
+        echo -e "${coff}"
+        read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}Y${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}Q${cdgy}\)  : ${cwh}${coff})" q_menu_couch_dropdb
+        case "${q_menu_couch_dropdb,,}" in
+            "n" | "update" )
+                unset couch_dropdb
+            ;;
+            "q" | "exit" )
+                print_info "Quitting Script"
+                exit 1
+            ;;
+            "y" | "yes" | * )
+                couch_dropdb=true
+            ;;
+        esac
+
+        print_info "Restoring '${r_filename}' into '${r_dbhost}'/'${r_dbname}'"
+
+        ## Drop and recreate if requested
+        if [ "${couch_dropdb}" = "true" ] ; then
+            print_info "Dropping database '${r_dbname}'"
+            curl -sSL ${_couch_auth} -X DELETE "${r_dbhost}:${r_dbport}/${r_dbname}" 2>/dev/null
+        fi
+
+        ## Create database (ignore error if exists)
+        curl -sSL ${_couch_auth} -X PUT "${r_dbhost}:${r_dbport}/${r_dbname}" 2>/dev/null
+
+        ## Extract docs, strip _rev, and bulk insert
+        pv ${r_filename} | ${decompress_cmd}cat | \
+            jq -c '{docs: [.rows[].doc | del(._rev)]}' | \
+            curl -sSL ${_couch_auth} -X POST "${r_dbhost}:${r_dbport}/${r_dbname}/_bulk_docs" \
+                -H "Content-Type: application/json" -d @-
         exit_code=$?
     ;;
     * )
