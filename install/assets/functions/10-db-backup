@@ -562,6 +562,10 @@ backup_couch() {
     write_log debug "Databases Found: $(echo ${db_names} | xargs | tr ' ' ',')"
 
     for db in ${db_names} ; do
+        if [ -z "${db}" ] || [ "${db}" = "undefined" ] || [ "${db}" = "null" ] ; then
+            write_log warn "[backup_couch] Skipping invalid database name: '${db}'"
+            continue
+        fi
         prepare_dbbackup
         if var_true "${DEBUG_BACKUP_COUCH}" ; then debug on; fi
         backup_job_filename=couch_${db}_${backup_job_db_host#*//}_${now}.json
@@ -571,12 +575,14 @@ backup_couch() {
         pre_dbbackup "${db}"
         write_log notice "Dumping CouchDB database: '${db}' ${compression_string}"
         if var_true "${DEBUG_BACKUP_COUCH}" ; then debug on; fi
+        ## Export in _bulk_docs format: {"docs":[...]} with _rev stripped for clean restore
         run_as_user ${play_fair} curl -sSL ${_couch_auth} \
             "${backup_job_db_host}:${backup_job_db_port}/${db}/_all_docs?include_docs=true" \
             ${backup_job_extra_opts} \
             ${backup_job_extra_backup_opts} \
+            | jq -c '{docs: [.rows[].doc | del(._rev, ._revisions)]}' \
             | ${compress_cmd} | run_as_user tee "${temporary_directory}"/"${backup_job_filename}" > /dev/null
-        exit_code=$((PIPESTATUS[0] + PIPESTATUS[1] + PIPESTATUS[2]))
+        exit_code=$((PIPESTATUS[0] + PIPESTATUS[1] + PIPESTATUS[2] + PIPESTATUS[3]))
         if var_true "${DEBUG_BACKUP_COUCH}" ; then debug off; fi
         check_exit_code backup "${backup_job_filename}"
         timer backup finish
@@ -753,6 +759,11 @@ backup_neo4j() {
     pre_dbbackup "${backup_job_db_name}"
     write_log notice "Dumping Neo4J database: '${backup_job_db_name}' ${compression_string}"
     if var_true "${DEBUG_BACKUP_NEO4J}" ; then debug on; fi
+    ## Pipeline: cypher-shell streams APOC output as a JSON-encoded string.
+    ## Post-processing strips the encoding so the file contains clean, directly-importable Cypher:
+    ##   tail -n +2         : remove 'cypherStatements' column header
+    ##   sed (first)        : strip surrounding double quotes and unescape internal \"
+    ##   awk                : convert literal \n sequences to actual newlines
     run_as_user ${play_fair} cypher-shell \
         -a "neo4j://${backup_job_db_host}:${backup_job_db_port}" \
         -u "${backup_job_db_user}" \
@@ -762,8 +773,11 @@ backup_neo4j() {
         ${backup_job_extra_opts} \
         ${backup_job_extra_backup_opts} \
         "CALL apoc.export.cypher.all(null, {stream:true, format:'cypher-shell'}) YIELD cypherStatements RETURN cypherStatements" \
+        | tail -n +2 \
+        | sed 's/^"//;s/"$//;s/\\"/"/g' \
+        | awk '{gsub(/\\n/,"\n")}1' \
         | ${compress_cmd} | run_as_user tee "${temporary_directory}"/"${backup_job_filename}" > /dev/null
-    exit_code=$((PIPESTATUS[0] + PIPESTATUS[1] + PIPESTATUS[2]))
+    exit_code=$((PIPESTATUS[0] + PIPESTATUS[1] + PIPESTATUS[2] + PIPESTATUS[3] + PIPESTATUS[4]))
     if var_true "${DEBUG_BACKUP_NEO4J}" ; then debug off; fi
     check_exit_code backup "${backup_job_filename}"
     timer backup finish

@@ -624,6 +624,11 @@ get_dbtype() {
             DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
             print_debug "Parsed DBType: CouchDB"
         ;;
+        neo4j* )
+            parsed_type=true
+            DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
+            print_debug "Parsed DBType: Neo4j"
+        ;;
         * )
             print_debug "Parsed DBType: UNKNOWN"
         ;;
@@ -674,7 +679,9 @@ EOF
 What Database Type are you looking to restore?
 ${q_dbtype_menu}
 
+    C ) CouchDB
     M ) MySQL / MariaDB
+    N ) Neo4j
     O ) MongoDB
     P ) Postgresql
     Q ) Quit
@@ -684,11 +691,21 @@ EOF
     case "${q_dbtype_variant}" in
         1 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}M${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
+                    c* )
+                        r_dbtype=couch
+                        DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
+                        break
+                    ;;
                     m* )
                         r_dbtype=mysql
                         DEFAULT_PORT=${DEFAULT_PORT:-"3306"}
+                        break
+                    ;;
+                    n* )
+                        r_dbtype=neo4j
+                        DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
                         break
                     ;;
                     o* )
@@ -710,15 +727,25 @@ EOF
         ;;
         2 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     e* | "" )
                         r_dbtype=${DB_TYPE}
                         break
                     ;;
+                    c* )
+                        r_dbtype=couch
+                        DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
+                        break
+                    ;;
                     m* )
                         r_dbtype=mysql
                         DEFAULT_PORT=${DEFAULT_PORT:-"3306"}
+                        break
+                    ;;
+                    n* )
+                        r_dbtype=neo4j
+                        DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
                         break
                     ;;
                     o* )
@@ -740,16 +767,22 @@ EOF
         ;;
         3 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}F${cdgy}\) \(Default\) \| \(${cwh}M${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}F${cdgy}\) \(Default\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     f* | "" )
                         r_dbtype=${p_dbtype}
                         case "${r_dbtype}" in
+                            couch* )
+                                DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
+                            ;;
                             mongo )
                                 DEFAULT_PORT=${DEFAULT_PORT:-"27017"}
                             ;;
                             mysql )
                                 DEFAULT_PORT=${DEFAULT_PORT:-"3306"}
+                            ;;
+                            neo4j )
+                                DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
                             ;;
                             pgsql )
                                 DEFAULT_PORT=${DEFAULT_PORT:-"5432"}
@@ -757,9 +790,19 @@ EOF
                         esac
                         break
                     ;;
+                    c* )
+                        r_dbtype=couch
+                        DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
+                        break
+                    ;;
                     m* )
                         r_dbtype=mysql
                         DEFAULT_PORT=${DEFAULT_PORT:-"3306"}
+                        break
+                    ;;
+                    n* )
+                        r_dbtype=neo4j
+                        DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
                         break
                     ;;
                     o* )
@@ -782,7 +825,7 @@ EOF
 
         4 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}F${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}F${cdgy}\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     e* | "" )
                         r_dbtype=${DB_TYPE}
@@ -792,9 +835,19 @@ EOF
                         r_dbtype=${p_dbtype}
                         break
                     ;;
+                    c* )
+                        r_dbtype=couch
+                        DEFAULT_PORT=${DEFAULT_PORT:-"5984"}
+                        break
+                    ;;
                     m* )
                         r_dbtype=mysql
                         DEFAULT_PORT=${DEFAULT_PORT:-"3306"}
+                        break
+                    ;;
+                    n* )
+                        r_dbtype=neo4j
+                        DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
                         break
                     ;;
                     o* )
@@ -1098,7 +1151,7 @@ case "${r_filename##*.}" in
                  decompress_cmd='zstd'
                  print_debug "Detected 'zstd' compression"
           ;;
-          sql )
+          sql | cypher | json )
                  print_debug "Detected No compression"
           ;;
           *  )
@@ -1166,6 +1219,110 @@ EOF
         mongorestore ${mongo_compression} -d=${r_dbname} -h=${r_dbhost} --port=${r_dbport} ${mongo_dropdb} ${mongo_user} ${mongo_pass} --archive=${r_filename} ${mongo_auth_database}
         exit_code=$?
     ;;
+    neo4j )
+        cat << EOF
+
+Do you wish to clear the existing database before restoring?
+    Y ) Yes - Delete all nodes, relationships, user indexes, and constraints
+    N ) No - Merge/add to existing data
+    Q ) Quit
+
+EOF
+
+        echo -e "${coff}"
+        read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}Y${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}Q${cdgy}\)  : ${cwh}${coff})" q_menu_neo4j_clear
+        case "${q_menu_neo4j_clear,,}" in
+            "n" | "no" )
+                unset neo4j_clear
+            ;;
+            "q" | "exit" )
+                print_info "Quitting Script"
+                exit 1
+            ;;
+            "y" | "yes" | * )
+                neo4j_clear=true
+            ;;
+        esac
+
+        print_info "Restoring '${r_filename}' into '${r_dbhost}'/'${r_dbname}'"
+
+        ## Clear database if requested — delete nodes, then drop every user index and every
+        ## constraint so a previously-failed import cannot leave behind 'UNIQUE_IMPORT_NAME' or
+        ## 'search' artifacts that would block a retry with "equivalent index already exists".
+        if [ "${neo4j_clear}" = "true" ] ; then
+            print_info "Clearing nodes and relationships from database '${r_dbname}'"
+            cypher-shell \
+                -a "neo4j://${r_dbhost}:${r_dbport}" \
+                -u "${r_dbuser}" \
+                -p "${r_dbpass}" \
+                -d "${r_dbname}" \
+                "MATCH (n) DETACH DELETE n;"
+
+            print_info "Dropping user-defined indexes from database '${r_dbname}'"
+            neo4j_indexes=$(cypher-shell \
+                -a "neo4j://${r_dbhost}:${r_dbport}" \
+                -u "${r_dbuser}" \
+                -p "${r_dbpass}" \
+                -d "${r_dbname}" \
+                --format plain \
+                "SHOW INDEXES YIELD name, type WHERE type <> 'LOOKUP' RETURN name;" 2>/dev/null \
+                | tail -n +2 | tr -d '"')
+            for idx in ${neo4j_indexes} ; do
+                cypher-shell \
+                    -a "neo4j://${r_dbhost}:${r_dbport}" \
+                    -u "${r_dbuser}" \
+                    -p "${r_dbpass}" \
+                    -d "${r_dbname}" \
+                    "DROP INDEX \`${idx}\` IF EXISTS;" >/dev/null 2>&1
+            done
+
+            print_info "Dropping constraints from database '${r_dbname}'"
+            neo4j_constraints=$(cypher-shell \
+                -a "neo4j://${r_dbhost}:${r_dbport}" \
+                -u "${r_dbuser}" \
+                -p "${r_dbpass}" \
+                -d "${r_dbname}" \
+                --format plain \
+                "SHOW CONSTRAINTS YIELD name RETURN name;" 2>/dev/null \
+                | tail -n +2 | tr -d '"')
+            for c in ${neo4j_constraints} ; do
+                cypher-shell \
+                    -a "neo4j://${r_dbhost}:${r_dbport}" \
+                    -u "${r_dbuser}" \
+                    -p "${r_dbpass}" \
+                    -d "${r_dbname}" \
+                    "DROP CONSTRAINT \`${c}\` IF EXISTS;" >/dev/null 2>&1
+            done
+        fi
+
+        ## Restore: pipe clean Cypher into cypher-shell
+        pv ${r_filename} | ${decompress_cmd}cat | \
+            cypher-shell \
+                -a "neo4j://${r_dbhost}:${r_dbport}" \
+                -u "${r_dbuser}" \
+                -p "${r_dbpass}" \
+                -d "${r_dbname}" \
+                --format plain
+        exit_code=$?
+
+        ## Verify — count nodes; a silent zero-node "success" must fail loudly.
+        print_info "Verifying restore — counting nodes in '${r_dbname}'"
+        neo4j_node_count=$(cypher-shell \
+            -a "neo4j://${r_dbhost}:${r_dbport}" \
+            -u "${r_dbuser}" \
+            -p "${r_dbpass}" \
+            -d "${r_dbname}" \
+            --format plain \
+            "MATCH (n) RETURN count(n) AS node_count;" 2>/dev/null \
+            | tail -n +2 | tr -d '[:space:]"')
+        if [ -z "${neo4j_node_count}" ] || [ "${neo4j_node_count}" = "0" ] ; then
+            print_error "VERIFY FAILED — Neo4j database '${r_dbname}' contains 0 nodes after restore"
+            restore_verify_failed="neo4j:${r_dbname}"
+            exit_code=4
+        else
+            print_info "Verify passed — Neo4j database '${r_dbname}' contains ${neo4j_node_count} nodes"
+        fi
+    ;;
     couch* )
         if [ -n "${r_dbuser}" ] && [ -n "${r_dbpass}" ]; then
             _couch_auth="-u ${r_dbuser}:${r_dbpass}"
@@ -1206,12 +1363,23 @@ EOF
         ## Create database (ignore error if exists)
         curl -sSL ${_couch_auth} -X PUT "${r_dbhost}:${r_dbport}/${r_dbname}" 2>/dev/null
 
-        ## Extract docs, strip _rev, and bulk insert
+        ## Restore: handle both new format ({"docs":[...]}) and old format ({"rows":[...]})
         pv ${r_filename} | ${decompress_cmd}cat | \
-            jq -c '{docs: [.rows[].doc | del(._rev)]}' | \
+            jq -c 'if .docs then . else {docs: [.rows[].doc | del(._rev)]} end' | \
             curl -sSL ${_couch_auth} -X POST "${r_dbhost}:${r_dbport}/${r_dbname}/_bulk_docs" \
                 -H "Content-Type: application/json" -d @-
         exit_code=$?
+
+        ## Verify — count docs; a silent zero-doc "success" must fail loudly.
+        print_info "Verifying restore — counting documents in '${r_dbname}'"
+        couch_doc_count=$(curl -sSL ${_couch_auth} "${r_dbhost}:${r_dbport}/${r_dbname}" 2>/dev/null | jq -r '.doc_count // 0')
+        if [ -z "${couch_doc_count}" ] || [ "${couch_doc_count}" = "0" ] || [ "${couch_doc_count}" = "null" ] ; then
+            print_error "VERIFY FAILED — CouchDB database '${r_dbname}' contains 0 documents after restore"
+            restore_verify_failed="${restore_verify_failed:+${restore_verify_failed},}couch:${r_dbname}"
+            exit_code=4
+        else
+            print_info "Verify passed — CouchDB database '${r_dbname}' contains ${couch_doc_count} documents"
+        fi
     ;;
     * )
         print_info "Unable to restore DB of type '${r_dbtype}'"
@@ -1220,7 +1388,10 @@ EOF
 esac
 
 print_debug "Exit code: ${exit_code}"
-if [ "${exit_code}" = 0 ] ; then
+if [ -n "${restore_verify_failed}" ] ; then
+    print_error "RESTORE VERIFY FAILED for: ${restore_verify_failed}"
+    print_error "A restore that imports zero rows is NOT a successful restore. Investigate before relying on this database."
+elif [ "${exit_code}" = 0 ] ; then
     print_info "Restore complete!"
 else
     print_error "Restore reported errors"

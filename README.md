@@ -868,7 +868,7 @@ Manual Backups can be performed by entering the container and typing `backup-now
 
 ### Restoring Databases
 
-Entering in the container and executing `restore` will execute a menu based script to restore your backups - MariaDB, Postgres, and Mongo supported.
+Entering in the container and executing `restore` will execute a menu based script to restore your backups - MariaDB, Postgres, Mongo, Neo4j, and CouchDB supported.
 
 You will be presented with a series of menus allowing you to choose:
 
@@ -888,6 +888,16 @@ The script can also be executed skipping the interactive mode by using the follo
     `restore <filename> <db_type> <db_hostname> <db_name> <db_user> <db_pass> <db_port>`
 
 If you only enter some of the arguments you will be prompted to fill them in.
+
+#### Dedicated Restore Session
+
+When performing a restore, you may want to prevent scheduled backups from running (e.g. to avoid backing up still-empty databases and overwriting good backup files). Set `MODE=MANUAL` and `MANUAL_RUN_FOREVER=TRUE` in your environment to disable all backup schedulers while keeping the container running. Then exec into the container to run `restore` interactively:
+
+```bash
+docker exec -it <container_name> restore
+```
+
+Remember to switch back to `MODE=AUTO` (or remove the override) once the restore is complete so that scheduled backups resume.
 
 
 
