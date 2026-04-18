@@ -107,6 +107,8 @@ Backs up CouchDB, InfluxDB, MySQL/MariaDB, Microsoft SQL, MongoDB, Neo4J, Postgr
   - [Shell Access](#shell-access)
   - [Manual Backups](#manual-backups)
   - [Restoring Databases](#restoring-databases)
+    - [Dedicated Restore Session](#dedicated-restore-session)
+    - [Redis Restore Caveats](#redis-restore-caveats)
 - [Support](#support)
   - [Usage](#usage)
   - [Bugfixes](#bugfixes)
@@ -868,7 +870,7 @@ Manual Backups can be performed by entering the container and typing `backup-now
 
 ### Restoring Databases
 
-Entering in the container and executing `restore` will execute a menu based script to restore your backups - MariaDB, Postgres, Mongo, Neo4j, and CouchDB supported.
+Entering in the container and executing `restore` will execute a menu based script to restore your backups - MariaDB, Postgres, Mongo, Neo4j, CouchDB, and Redis supported.
 
 You will be presented with a series of menus allowing you to choose:
 
@@ -899,7 +901,14 @@ docker exec -it <container_name> restore
 
 Remember to switch back to `MODE=AUTO` (or remove the override) once the restore is complete so that scheduled backups resume.
 
+#### Redis Restore Caveats
 
+Redis backups are binary `.rdb` files. The restore uses `rdbtools` to convert the RDB into Redis protocol commands and pipes them through `redis-cli --pipe`, so the restore runs over the network without stopping the Redis server.
+
+- **Logical DB 0 only.** The pipeline restores into database 0. For multi-DB setups, pre-issue `SELECT` or restore one DB at a time with a custom pipeline.
+- **Standard data types only.** `rdbtools` does not fully support every RDB feature — notably Redis Modules, Streams, and the newest RDB format versions may fail to decode. Stick to strings, hashes, lists, sets, sorted sets, and standard TTLs for reliable restores.
+- **FLUSHALL prompt.** The restore asks whether to `FLUSHALL` the target before importing. Answering *No* merges/overwrites keys into the existing keyspace.
+- **File picker shows `.rdb` files.** Compressed variants (`.rdb.gz`, `.rdb.zst`, etc.) are decompressed to a temp file before conversion, because `rdbtools` needs a seekable file for the trailing checksum.
 
 ## Support
 

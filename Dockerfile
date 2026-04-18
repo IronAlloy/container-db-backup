@@ -2,7 +2,7 @@ ARG DISTRO=alpine
 ARG DISTRO_VARIANT=3.21-7.10.31
 
 FROM docker.io/tiredofit/${DISTRO}:${DISTRO_VARIANT}
-LABEL maintainer="Dave Conroy (github.com/tiredofit)"
+LABEL maintainer="nfrastack (github.com/nfrastack)"
 
 ENV INFLUX1_CLIENT_VERSION=1.8.0 \
     INFLUX2_CLIENT_VERSION=2.7.5 \
@@ -15,8 +15,8 @@ ENV INFLUX1_CLIENT_VERSION=1.8.0 \
     POSTGRES_VERSION=18.3 \
     CONTAINER_ENABLE_MESSAGING=TRUE \
     CONTAINER_ENABLE_MONITORING=TRUE \
-    IMAGE_NAME="tiredofit/db-backup" \
-    IMAGE_REPO_URL="https://github.com/tiredofit/docker-db-backup/"
+    IMAGE_NAME="nfrastack/container-db-backup" \
+    IMAGE_REPO_URL="https://github.com/nfrastack/container-db-backup/"
 
 RUN source /assets/functions/00-container && \
     set -ex && \
@@ -237,6 +237,7 @@ RUN source /assets/functions/00-container && \
     \
     pip3 install --break-system-packages awscli==${AWS_CLI_VERSION} && \
     pip3 install --break-system-packages blobxfer && \
+    pip3 install --break-system-packages rdbtools python-lzf && \
     \
     mkdir -p /usr/src/pbzip2 && \
     curl -sSL https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz | tar xvfz - --strip=1 -C /usr/src/pbzip2 && \

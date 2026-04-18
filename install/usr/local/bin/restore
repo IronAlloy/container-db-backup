@@ -629,6 +629,11 @@ get_dbtype() {
             DEFAULT_PORT=${DEFAULT_PORT:-"7687"}
             print_debug "Parsed DBType: Neo4j"
         ;;
+        redis* )
+            parsed_type=true
+            DEFAULT_PORT=${DEFAULT_PORT:-"6379"}
+            print_debug "Parsed DBType: Redis"
+        ;;
         * )
             print_debug "Parsed DBType: UNKNOWN"
         ;;
@@ -684,6 +689,7 @@ ${q_dbtype_menu}
     N ) Neo4j
     O ) MongoDB
     P ) Postgresql
+    R ) Redis
     Q ) Quit
 
 EOF
@@ -691,7 +697,7 @@ EOF
     case "${q_dbtype_variant}" in
         1 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) \| \(${cwh}R${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     c* )
                         r_dbtype=couch
@@ -718,6 +724,11 @@ EOF
                         DEFAULT_PORT=${DEFAULT_PORT:-"5432"}
                         break
                     ;;
+                    r* )
+                        r_dbtype=redis
+                        DEFAULT_PORT=${DEFAULT_PORT:-"6379"}
+                        break
+                    ;;
                     q* )
                         print_info "Quitting Script"
                         exit 1
@@ -727,7 +738,7 @@ EOF
         ;;
         2 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) \| \(${cwh}R${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     e* | "" )
                         r_dbtype=${DB_TYPE}
@@ -758,6 +769,11 @@ EOF
                         DEFAULT_PORT=${DEFAULT_PORT:-"5432"}
                         break
                     ;;
+                    r* )
+                        r_dbtype=redis
+                        DEFAULT_PORT=${DEFAULT_PORT:-"6379"}
+                        break
+                    ;;
                     q* )
                         print_info "Quitting Script"
                         exit 1
@@ -767,7 +783,7 @@ EOF
         ;;
         3 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}F${cdgy}\) \(Default\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}F${cdgy}\) \(Default\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) \| \(${cwh}R${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     f* | "" )
                         r_dbtype=${p_dbtype}
@@ -815,6 +831,11 @@ EOF
                         DEFAULT_PORT=${DEFAULT_PORT:-"5432"}
                         break
                     ;;
+                    r* )
+                        r_dbtype=redis
+                        DEFAULT_PORT=${DEFAULT_PORT:-"6379"}
+                        break
+                    ;;
                     q* )
                         print_info "Quitting Script"
                         exit 1
@@ -825,7 +846,7 @@ EOF
 
         4 )
             while true; do
-                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}F${cdgy}\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) : ${cwh}${coff}) " q_dbtype
+                read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}E${cdgy}\) \| \(${cwh}F${cdgy}\) \| \(${cwh}C${cdgy}\) \| \(${cwh}M${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}O${cdgy}\) \| \(${cwh}P${cdgy}\) \| \(${cwh}R${cdgy}\) : ${cwh}${coff}) " q_dbtype
                 case "${q_dbtype,,}" in
                     e* | "" )
                         r_dbtype=${DB_TYPE}
@@ -858,6 +879,11 @@ EOF
                     p* )
                         r_dbtype=postgresql
                         DEFAULT_PORT=${DEFAULT_PORT:-"5432"}
+                        break
+                    ;;
+                    r* )
+                        r_dbtype=redis
+                        DEFAULT_PORT=${DEFAULT_PORT:-"6379"}
                         break
                     ;;
                     q* )
@@ -946,7 +972,11 @@ EOF
 get_filename() {
     COLUMNS=12
     prompt="Please select a file to restore:"
-    options=( $(find "${DEFAULT_FILESYSTEM_PATH}" -type f -maxdepth 2  -not -name '*.md5' -not -name '*.sha1' -not -name '*.gpg' -print0 | sort -z | xargs -0) )
+    ## Include symlinks (-type l) so 'latest-*' pointers appear. Surface latest-* first,
+    ## then the rest newest-first (filenames embed YYYYMMDD_HHMMSS, so reverse-sort == newest-first).
+    latest_files=( $(find "${DEFAULT_FILESYSTEM_PATH}" -maxdepth 2 \( -type f -o -type l \) -name 'latest-*' -not -name '*.md5' -not -name '*.sha1' -not -name '*.gpg' -print0 | sort -z | xargs -0) )
+    other_files=( $(find "${DEFAULT_FILESYSTEM_PATH}" -maxdepth 2 \( -type f -o -type l \) -not -name 'latest-*' -not -name '*.md5' -not -name '*.sha1' -not -name '*.gpg' -print0 | sort -zr | xargs -0) )
+    options=( "${latest_files[@]}" "${other_files[@]}" )
     PS3="$prompt "
     select opt in "${options[@]}" "Custom" "Quit" ; do
         if (( REPLY == 2 + ${#options[@]} )) ; then
@@ -1134,7 +1164,12 @@ fi
 
 
 ## Parse Extension
-case "${r_filename##*.}" in
+## Resolve symlinks so latest-* aliases pick up the real file's extension.
+_r_filename_for_ext="${r_filename}"
+if [ -L "${r_filename}" ] ; then
+    _r_filename_for_ext=$(readlink -f "${r_filename}")
+fi
+case "${_r_filename_for_ext##*.}" in
           bz* )
                  decompress_cmd='bz'
                  print_debug "Detected 'bzip2' compression"
@@ -1155,7 +1190,28 @@ case "${r_filename##*.}" in
                  print_debug "Detected No compression"
           ;;
           *  )
-                 print_debug "Cannot tell what the extension is for compression"
+                 _mime=$(file --brief --mime-type "${r_filename}" 2>/dev/null)
+                 case "${_mime}" in
+                     application/gzip | application/x-gzip )
+                         decompress_cmd="z"
+                         print_debug "Detected 'gzip' compression (via magic bytes)"
+                     ;;
+                     application/x-bzip2 )
+                         decompress_cmd="bz"
+                         print_debug "Detected 'bzip2' compression (via magic bytes)"
+                     ;;
+                     application/x-xz )
+                         decompress_cmd="xz"
+                         print_debug "Detected 'xzip' compression (via magic bytes)"
+                     ;;
+                     application/zstd )
+                         decompress_cmd="zstd"
+                         print_debug "Detected 'zstd' compression (via magic bytes)"
+                     ;;
+                     * )
+                         print_debug "Cannot tell what the extension is for compression"
+                     ;;
+                 esac
           ;;
 esac
 
@@ -1379,6 +1435,69 @@ EOF
             exit_code=4
         else
             print_info "Verify passed — CouchDB database '${r_dbname}' contains ${couch_doc_count} documents"
+        fi
+    ;;
+    redis )
+        cat << EOF
+
+Do you wish to flush the target Redis before restoring?
+    Y ) Yes - FLUSHALL, then import
+    N ) No  - Merge/overwrite into existing keyspace
+    Q ) Quit
+
+EOF
+
+        echo -e "${coff}"
+        read -p "$(echo -e ${clg}** ${cdgy}Enter Value \(${cwh}Y${cdgy}\) \| \(${cwh}N${cdgy}\) \| \(${cwh}Q${cdgy}\)  : ${cwh}${coff})" q_menu_redis_flush
+        case "${q_menu_redis_flush,,}" in
+            "n" | "no" )
+                unset redis_flush
+            ;;
+            "q" | "exit" )
+                print_info "Quitting Script"
+                exit 1
+            ;;
+            "y" | "yes" | * )
+                redis_flush=true
+            ;;
+        esac
+
+        print_info "Restoring '${r_filename}' into '${r_dbhost}:${r_dbport}'"
+
+        redis_auth_args=()
+        if [ -n "${r_dbpass}" ] ; then
+            redis_auth_args+=(-a "${r_dbpass}" --no-auth-warning)
+        fi
+
+        ## rdbtools needs a seekable file (checksum trailer). Decompress first, work on a temp copy.
+        redis_tmp_rdb=$(mktemp --suffix=.rdb)
+        if [ -n "${decompress_cmd}" ] ; then
+            ${decompress_cmd}cat "${r_filename}" > "${redis_tmp_rdb}"
+        else
+            cp "${r_filename}" "${redis_tmp_rdb}"
+        fi
+
+        if [ "${redis_flush}" = "true" ] ; then
+            print_info "FLUSHALL on '${r_dbhost}:${r_dbport}'"
+            redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" FLUSHALL
+        fi
+
+        ## Convert RDB -> Redis protocol, pipe into redis-cli --pipe. rdb reads the file by path
+        ## (needs seek for the trailing checksum), so pv-on-input doesn't make sense here.
+        rdb --command protocol "${redis_tmp_rdb}" | \
+            redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" --pipe
+        exit_code=$?
+        rm -f "${redis_tmp_rdb}"
+
+        ## Verify — DBSIZE > 0.
+        print_info "Verifying restore — counting keys in '${r_dbhost}:${r_dbport}'"
+        redis_key_count=$(redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" DBSIZE 2>/dev/null | tr -d '[:space:]')
+        if [ -z "${redis_key_count}" ] || [ "${redis_key_count}" = "0" ] ; then
+            print_error "VERIFY FAILED — Redis at '${r_dbhost}:${r_dbport}' contains 0 keys after restore"
+            restore_verify_failed="${restore_verify_failed:+${restore_verify_failed},}redis:${r_dbhost}"
+            exit_code=4
+        else
+            print_info "Verify passed — Redis at '${r_dbhost}:${r_dbport}' contains ${redis_key_count} keys"
         fi
     ;;
     * )
