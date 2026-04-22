@@ -108,7 +108,7 @@ Backs up CouchDB, InfluxDB, MySQL/MariaDB, Microsoft SQL, MongoDB, Neo4J, Postgr
   - [Manual Backups](#manual-backups)
   - [Restoring Databases](#restoring-databases)
     - [Dedicated Restore Session](#dedicated-restore-session)
-    - [Redis Restore Caveats](#redis-restore-caveats)
+    - [Redis Restore](#redis-restore)
 - [Support](#support)
   - [Usage](#usage)
   - [Bugfixes](#bugfixes)
@@ -310,7 +310,7 @@ Encryption occurs after compression and the encrypted filename will have a `.gpg
 
 | Variable       | Description | Default | `_FILE` |
 | -------------- | ----------- | ------- | ------- |
-| `DEFAULT_PORT` | Neo4J Port  | `7687`  | x       |
+| `DEFAULT_PORT` | Neo4J Bolt Port  | `7687`  | x       |
 
 > Requires the [APOC](https://neo4j.com/docs/apoc/current/) plugin to be installed on the Neo4J server.
 > `DB_NAME` should be set to the target database name (default Neo4J database is named `neo4j`).
@@ -901,14 +901,42 @@ docker exec -it <container_name> restore
 
 Remember to switch back to `MODE=AUTO` (or remove the override) once the restore is complete so that scheduled backups resume.
 
-#### Redis Restore Caveats
+#### Redis Restore
 
-Redis backups are binary `.rdb` files. The restore uses `rdbtools` to convert the RDB into Redis protocol commands and pipes them through `redis-cli --pipe`, so the restore runs over the network without stopping the Redis server.
+Redis backups are binary `.rdb` files. The restore writes the RDB file directly into Redis's data directory and sends `DEBUG RELOAD NOSAVE`, which instructs the running Redis server to load the file without a prior dump. This approach works with every RDB version the Redis server itself supports, and does not depend on any third-party RDB parser.
 
-- **Logical DB 0 only.** The pipeline restores into database 0. For multi-DB setups, pre-issue `SELECT` or restore one DB at a time with a custom pipeline.
-- **Standard data types only.** `rdbtools` does not fully support every RDB feature — notably Redis Modules, Streams, and the newest RDB format versions may fail to decode. Stick to strings, hashes, lists, sets, sorted sets, and standard TTLs for reliable restores.
-- **FLUSHALL prompt.** The restore asks whether to `FLUSHALL` the target before importing. Answering *No* merges/overwrites keys into the existing keyspace.
-- **File picker shows `.rdb` files.** Compressed variants (`.rdb.gz`, `.rdb.zst`, etc.) are decompressed to a temp file before conversion, because `rdbtools` needs a seekable file for the trailing checksum.
+**CLI invocation:**
+
+```bash
+restore <filename> redis <host> <ignored> <user> <password> <port>
+```
+
+The `db_name` positional argument is accepted for consistency with other DB types but is not used. The `db_user` argument is used when Redis is configured with ACL users; pass the ACL username or an empty string for `requirepass`-only setups.
+
+**Prerequisites:**
+
+- **Shared data volume.** The restore script uses `CONFIG GET dir` to discover where Redis stores its RDB file, then copies the backup there. This only works if the Redis data volume is mounted into the backup container **at the same path Redis uses** (typically `/data`).
+
+  Example Compose snippet:
+  ```yaml
+  services:
+    redis:
+      image: redis
+      volumes:
+        - redis-data:/data
+    backup-db:
+      image: nfrastack/container-db-backup
+      volumes:
+        - redis-data:/data   # same named volume, same mount path
+  ```
+
+- **DEBUG command enabled.** The restore sends `DEBUG RELOAD NOSAVE`. If the Redis server has renamed or disabled the `DEBUG` command (e.g. `rename-command DEBUG ""`), the reload step will fail. Re-enable it for the duration of the restore or use the `ACL` system to grant access.
+
+**Caveats:**
+
+- **FLUSHALL prompt — default is YES.** The restore always prompts whether to `FLUSHALL` the target before importing. Answering `N` or `No` merges/overwrites keys into the existing keyspace. Any other input — including pressing Enter — triggers `FLUSHALL`. This prompt appears even when all arguments are supplied on the command line.
+- **Post-restore verification.** After reload the script issues `DBSIZE` against the target. If the key count is 0 or non-numeric (e.g. an auth error string) the restore is flagged as failed (exit code 4). A positive integer count is reported as a successful verify; it does not confirm every key round-tripped correctly.
+- **Compressed backups.** Variants with compression suffixes (`.rdb.gz`, `.rdb.zst`, `.rdb.bz2`, etc.) are decompressed to a temporary file before the copy step.
 
 ## Support
 

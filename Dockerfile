@@ -72,8 +72,6 @@ RUN source /assets/functions/00-container && \
    awk '$1 == "#define" && $2 == "DEFAULT_PGSOCKET_DIR" && $3 == "\"/tmp\"" { $3 = "\"/var/run/postgresql\""; print; next } { print }' src/include/pg_config_manual.h > src/include/pg_config_manual.h.new && \
    grep '/var/run/postgresql' src/include/pg_config_manual.h.new && \
    mv src/include/pg_config_manual.h.new src/include/pg_config_manual.h && \
-   wget -O config/config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=7d3d27baf8107b630586c962c057e22149653deb' && \
-   wget -O config/config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub?id=7d3d27baf8107b630586c962c057e22149653deb' && \
    export LLVM_CONFIG="/usr/lib/llvm19/bin/llvm-config" && \
    export CLANG=clang-19  && \
     ./configure \
@@ -237,7 +235,6 @@ RUN source /assets/functions/00-container && \
     \
     pip3 install --break-system-packages awscli==${AWS_CLI_VERSION} && \
     pip3 install --break-system-packages blobxfer && \
-    pip3 install --break-system-packages rdbtools python-lzf && \
     \
     mkdir -p /usr/src/pbzip2 && \
     curl -sSL https://launchpad.net/pbzip2/1.1/1.1.13/+download/pbzip2-1.1.13.tar.gz | tar xvfz - --strip=1 -C /usr/src/pbzip2 && \

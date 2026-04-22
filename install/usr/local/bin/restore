@@ -1190,21 +1190,21 @@ case "${_r_filename_for_ext##*.}" in
                  print_debug "Detected No compression"
           ;;
           *  )
-                 _mime=$(file --brief --mime-type "${r_filename}" 2>/dev/null)
-                 case "${_mime}" in
-                     application/gzip | application/x-gzip )
+                 _magic=$(od -A n -N 4 -t x1 "${r_filename}" 2>/dev/null | tr -d ' \n')
+                 case "${_magic}" in
+                     1f8b* )
                          decompress_cmd="z"
                          print_debug "Detected 'gzip' compression (via magic bytes)"
                      ;;
-                     application/x-bzip2 )
+                     425a68* )
                          decompress_cmd="bz"
                          print_debug "Detected 'bzip2' compression (via magic bytes)"
                      ;;
-                     application/x-xz )
+                     fd377a58* )
                          decompress_cmd="xz"
                          print_debug "Detected 'xzip' compression (via magic bytes)"
                      ;;
-                     application/zstd )
+                     28b52ffd* )
                          decompress_cmd="zstd"
                          print_debug "Detected 'zstd' compression (via magic bytes)"
                      ;;
@@ -1230,8 +1230,14 @@ case "${r_dbtype}" in
     pgsql | postgres* )
         print_info "Restoring '${r_filename}' into '${r_dbhost}'/'${r_dbname}'"
         export PGPASSWORD=${r_dbpass}
-        pv ${r_filename} | ${decompress_cmd}cat | psql  -d ${r_dbname} -h ${r_dbhost} -p ${r_dbport} -U ${r_dbuser}
+        pv ${r_filename} | ${decompress_cmd}cat | psql -d ${r_dbname} -h ${r_dbhost} -p ${r_dbport} -U ${r_dbuser}
         exit_code=$?
+        if [ "${exit_code}" = 0 ] ; then
+            psql -d ${r_dbname} -h ${r_dbhost} -p ${r_dbport} -U ${r_dbuser} -c "ANALYZE;" > /dev/null 2>&1
+            pgsql_table_count=$(psql -d ${r_dbname} -h ${r_dbhost} -p ${r_dbport} -U ${r_dbuser} -t -c "SELECT COUNT(*) FROM pg_stat_user_tables;" 2>/dev/null | tr -d ' \n')
+            pgsql_row_count=$(psql -d ${r_dbname} -h ${r_dbhost} -p ${r_dbport} -U ${r_dbuser} -t -c "SELECT COALESCE(SUM(n_live_tup),0) FROM pg_stat_user_tables;" 2>/dev/null | tr -d ' \n')
+            print_info "Restore summary — ${pgsql_table_count:-0} tables, ~${pgsql_row_count:-0} rows restored"
+        fi
     ;;
     mongo )
         cat << EOF
@@ -1351,9 +1357,12 @@ EOF
             done
         fi
 
-        ## Restore: pipe clean Cypher into cypher-shell
-        pv ${r_filename} | ${decompress_cmd}cat | \
-            cypher-shell \
+        ## Restore: pipe Cypher into cypher-shell.
+        ## Handle both clean Cypher (current backup format) and raw APOC stream output
+        ## (older backups where the 'cypherStatements' header and JSON-encoding were not stripped).
+        pv "${r_filename}" | ${decompress_cmd}cat \
+            | awk 'NR==1&&$0=="cypherStatements"{raw=1;next}raw{l=$0;sub(/^"/,"",l);sub(/"$/,"",l);gsub(/\\"/,"\"",l);gsub(/\\n/,"\n",l);print l;next}{print}' \
+            | cypher-shell \
                 -a "neo4j://${r_dbhost}:${r_dbport}" \
                 -u "${r_dbuser}" \
                 -p "${r_dbpass}" \
@@ -1466,7 +1475,11 @@ EOF
 
         redis_auth_args=()
         if [ -n "${r_dbpass}" ] ; then
-            redis_auth_args+=(-a "${r_dbpass}" --no-auth-warning)
+            if [ -n "${r_dbuser}" ] ; then
+                redis_auth_args+=(--user "${r_dbuser}" --pass "${r_dbpass}" --no-auth-warning)
+            else
+                redis_auth_args+=(-a "${r_dbpass}" --no-auth-warning)
+            fi
         fi
 
         ## rdbtools needs a seekable file (checksum trailer). Decompress first, work on a temp copy.
@@ -1482,18 +1495,38 @@ EOF
             redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" FLUSHALL
         fi
 
-        ## Convert RDB -> Redis protocol, pipe into redis-cli --pipe. rdb reads the file by path
-        ## (needs seek for the trailing checksum), so pv-on-input doesn't make sense here.
-        rdb --command protocol "${redis_tmp_rdb}" | \
-            redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" --pipe
-        exit_code=$?
+        ## Restore via direct RDB file placement + DEBUG RELOAD NOSAVE.
+        ## CONFIG GET dir returns the data path as Redis sees it; if that path is mounted into
+        ## this container at the same location the copy succeeds and the reload is instant.
+        ## Works with every RDB version the Redis server itself supports.
+        _redis_data_dir=$(redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" CONFIG GET dir 2>/dev/null | awk 'NR==2{print;exit}')
+        _redis_dbfile=$(redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" CONFIG GET dbfilename 2>/dev/null | awk 'NR==2{print;exit}')
+        _redis_dbfile="${_redis_dbfile:-dump.rdb}"
+
+        if [ -z "${_redis_data_dir}" ] || [ ! -d "${_redis_data_dir}" ] ; then
+            print_error "Redis data directory '${_redis_data_dir:-<unreachable>}' is not accessible from this container."
+            print_error "Mount the Redis data volume into this container at the same path the Redis server uses (commonly /data)."
+            print_error "Example (Compose): add 'volumes: - redis-data:/data' to the backup service."
+            exit_code=1
+        else
+            print_info "Writing RDB to '${_redis_data_dir}/${_redis_dbfile}'"
+            cp "${redis_tmp_rdb}" "${_redis_data_dir}/${_redis_dbfile}"
+            _reload_result=$(redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" DEBUG RELOAD NOSAVE 2>&1)
+            if echo "${_reload_result}" | grep -qi "^ok$" ; then
+                exit_code=0
+            else
+                print_error "DEBUG RELOAD NOSAVE failed: ${_reload_result}"
+                print_error "Ensure the Redis DEBUG command is not disabled (rename-command DEBUG \"\")."
+                exit_code=1
+            fi
+        fi
         rm -f "${redis_tmp_rdb}"
 
         ## Verify — DBSIZE > 0.
         print_info "Verifying restore — counting keys in '${r_dbhost}:${r_dbport}'"
         redis_key_count=$(redis-cli -h "${r_dbhost}" -p "${r_dbport}" "${redis_auth_args[@]}" DBSIZE 2>/dev/null | tr -d '[:space:]')
-        if [ -z "${redis_key_count}" ] || [ "${redis_key_count}" = "0" ] ; then
-            print_error "VERIFY FAILED — Redis at '${r_dbhost}:${r_dbport}' contains 0 keys after restore"
+        if [ -z "${redis_key_count}" ] || [ "${redis_key_count}" = "0" ] || ! [[ "${redis_key_count}" =~ ^[0-9]+$ ]] ; then
+            print_error "VERIFY FAILED — Redis at '${r_dbhost}:${r_dbport}' contains 0 keys after restore (DBSIZE returned: '${redis_key_count}')"
             restore_verify_failed="${restore_verify_failed:+${restore_verify_failed},}redis:${r_dbhost}"
             exit_code=4
         else
